@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const ACCOUNT_SERVICE_URL =
-  process.env.ACCOUNT_SERVICE_URL || "http://localhost:8085";
+  process.env.ACCOUNT_SERVICE_URL || "http://accounting-service:8085";
 const NOTIFICATION_SERVICE_URL =
   process.env.NOTIFICATION_SERVICE_URL || "http://localhost:8038";
 
