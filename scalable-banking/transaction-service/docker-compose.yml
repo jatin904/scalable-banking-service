@@ -333,12 +333,12 @@ services:
   # -----------------------------------------------------------
   # Account Service
   # -----------------------------------------------------------
-  account-service:
+  accounting-service:
     build: ../account-service
     ports:
-      - "8083:8083"
+      - "8085:8085"
     environment:
-      - PORT=8083
+      - PORT=8085
     command: npm start
     networks:
       - scalable_net
@@ -373,13 +373,13 @@ services:
       - PGPASSWORD=txn_pass
       - PGDATABASE=transaction_db
       - PGPORT=5432
-      - ACCOUNT_SERVICE_URL=http://localhost:8085
+      - ACCOUNT_SERVICE_URL=http://accounting-service:8085
       - NOTIFICATION_SERVICE_URL=http://localhost:8038
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     depends_on:
       - transaction-db
       - rabbitmq
-      - account-service
+      - accounting-service
     volumes:
       - ../openapi.yaml:/app/openapi.yaml
     command: npm run start

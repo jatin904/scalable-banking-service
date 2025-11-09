@@ -146,4 +146,4 @@ kind: ConfigMap
 metadata:
   creationTimestamp: null
   name: transaction-openapi
-  namespace: banking
+  namespace: transaction-service
