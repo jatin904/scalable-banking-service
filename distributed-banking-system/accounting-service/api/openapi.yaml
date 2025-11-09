@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: Accounting Service API
+  description: |
+    Manages customer accounts, including creation, status changes, and eligibility checks.
+    This service is the source of truth for account balances and status.
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: Production/Development Server Path
+
+components:
+  schemas:
+    Account:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the account (PK).
+        customer_id:
+          type: string
+          format: uuid
+          description: Logical FK to the Customer Service.
+        account_number:
+          type: string
+          description: Unique 20-digit bank account number.
+        account_type:
+          type: string
+          enum: [SAVINGS, CHECKING, LOAN]
+          description: Type of the account.
+        balance:
+          type: string # Changed from number/double for high precision (matches DECIMAL(19, 4) in DB)
+          description: Current account balance. Stored as DECIMAL(19, 4) in DB.
+        currency:
+          type: string
+          default: INR
+        status:
+          type: string
+          enum: [ACTIVE, FROZEN, CLOSED]
+          default: ACTIVE
+        daily_transfer_limit:
+          type: string # Changed from number/double for high precision
+          description: Maximum amount allowed for daily transfers (Business Rule).
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EligibilityResponse:
+      type: object
+      properties:
+        is_eligible:
+          type: boolean
+          description: True if the account can proceed with a transaction.
+        account_status:
+          type: string
+          enum: [ACTIVE, FROZEN, CLOSED]
+        available_balance:
+          type: string # Changed from number/double for high precision
+        daily_limit:
+          type: string # Changed from number/double for high precision
+        error_code:
+          type: string
+          nullable: true
+          description: Code indicating the reason for ineligibility (e.g., FROZEN_ACCOUNT).
+        message:
+          type: string
+          description: Human-readable message.
+
+paths:
+  /accounts:
+    post:
+      summary: Create a new bank account
+      operationId: createAccount
+      tags:
+        - Accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customer_id
+                - account_type
+                - account_number
+              properties:
+                customer_id:
+                  type: string
+                  format: uuid
+                  example: 123e4567-e89b-12d3-a456-426614174000
+                account_type:
+                  type: string
+                  enum: [SAVINGS, CHECKING]
+                  example: SAVINGS
+                account_number:
+                  type: string
+                  example: '98765432101234567890'
+                initial_deposit:
+                  type: string # Changed from number/double for high precision
+                  default: '0.00'
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Missing required fields
+        '409':
+          description: Account number already exists
+
+  /accounts/{accountId}:
+    get:
+      summary: Fetch account details by ID
+      operationId: getAccountById
+      tags:
+        - Accounts
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: f0e31b81-a9f8-4b7c-8d1e-289b88a7b8e2
+      responses:
+        '200':
+          description: Account found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          description: Account not found
+
+  /accounts/{accountId}/status:
+    put:
+      summary: Update account status (e.g., Freeze or Close)
+      operationId: updateAccountStatus
+      tags:
+        - Accounts
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [ACTIVE, FROZEN, CLOSED]
+                  example: FROZEN
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          description: Invalid status provided
+        '404':
+          description: Account not found
+
+  /accounts/{accountId}/check-transaction-eligibility:
+    post:
+      summary: Check if an account is eligible for transactions (e.g., not frozen)
+      operationId: checkTransactionEligibility
+      tags:
+        - Business Rules
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Account is eligible or ineligible (details in body)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+        '403':
+          description: Account status blocks transaction (e.g., Frozen)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+        '404':
+          description: Account not found
+
+  /accounts/{accountId}/debit: # This path is now correctly nested under 'paths:'
+    post:
+      summary: Atomically debits a specific amount from an account balance.
+      description: |
+        Used by the Transaction Service to move funds out of an account. 
+        Enforces two business rules atomically: 1) Account must be 'ACTIVE'. 
+        2) Account balance must be sufficient for the debit amount.
+      operationId: debitAccount
+      tags:
+        - Funds Movement
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The unique ID of the account to debit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: string # Changed from number/float for high precision
+                  example: '15000.00'
+              required:
+                - amount
+      responses:
+        '200':
+          description: Debit successful. Returns the updated account details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                account_id: 767059cd-e802-4211-b1b0-35af750f4250
+                customer_id: 123e4567-e89b-12d3-a456-426614174000
+                account_number: '98765432101234567890'
+                account_type: SAVINGS
+                balance: '35000.5000' # Balance reduced by 15000
+                currency: INR
+                status: ACTIVE
+                daily_transfer_limit: '200000.0000'
+                created_at: 2025-11-08T10:39:00.000Z
+                updated_at: 2025-11-08T10:45:00.000Z
+        '400':
+          description: Invalid input (e.g., non-positive amount, invalid UUID).
+        '403':
+          description: Forbidden - Business Rule Violation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_eligible:
+                    type: boolean # Added 'is_eligible'

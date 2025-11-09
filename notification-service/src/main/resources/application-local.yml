@@ -1,0 +1,21 @@
+spring:
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+notification:
+  mail:
+    mock-delivery: true
+  sms:
+    mock-delivery: true
+    # Read Twilio credentials from environment or env/local.env. The loader maps TWILIO_* keys
+    # to notification.sms.*; these placeholders provide an additional fallback for standard env var binding.
+    account-sid: ${TWILIO_ACCOUNT_SID:${NOTIFICATION_SMS_ACCOUNT_SID:}}
+    auth-token: ${TWILIO_AUTH_TOKEN:${NOTIFICATION_SMS_AUTH_TOKEN:}}
+    from-number: ${TWILIO_FROM_NUMBER:${NOTIFICATION_SMS_FROM_NUMBER:}}

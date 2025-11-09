@@ -1,0 +1,120 @@
+# services:
+#   # 1. PostgreSQL Database Container
+#   db:
+#     image: postgres:14
+#     container_name: accounting_db
+#     restart: always
+#     environment:
+#       POSTGRES_USER: ${DB_USER}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD}
+#       POSTGRES_DB: ${DB_NAME}
+#     ports:
+#       - "5432:5432" # Expose the DB port for local access if needed
+#     volumes:
+#       - ./database:/docker-entrypoint-initdb.d # Runs schema.sql on first start
+
+#   # 2. Node.js Accounting Service Container
+#   accounting-service:
+#     build: 
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: accounting_service_app
+#     restart: on-failure
+#     ports:
+#       - "8080:8080"
+#     working_dir: /app 
+#     environment:
+#       # Pass required environment variables from the .env file
+#       DB_HOST: db # Service name within the docker network
+#       DB_PORT: 5432
+#       DB_USER: ${DB_USER}
+#       DB_PASSWORD: ${DB_PASSWORD}
+#       DB_NAME: ${DB_NAME}
+#       PORT: ${PORT}
+#     depends_on:
+#       - db
+      
+#   # 3. Database Viewer (Adminer) Container - NEW SERVICE!
+#   adminer:
+#     image: adminer:latest
+#     container_name: db_viewer
+#     restart: always
+#     ports:
+#       - "8081:8080" # Maps container port 8080 to host port 8081
+#     depends_on:
+#       - db
+# # 4. API Documentation Viewer (Swagger UI)
+#   swagger-ui:
+#     image: swaggerapi/swagger-ui
+#     restart: always
+#     environment:
+#       # Tell Swagger UI to load the spec from the mounted file
+#       SWAGGER_JSON: /app/api/openapi.yaml
+#     ports:
+#       - "8082:8080" # Swagger UI runs on 8080 inside the container
+#     volumes:
+#       # Mount the local openapi.yaml into the container
+#       - ./api/openapi.yaml:/app/api/openapi.yaml
+#     depends_on:
+#       - accounting-service
+
+version: '3.9'
+
+services:
+  # 1. PostgreSQL Database Container
+  db:
+    image: postgres:14
+    container_name: accounting_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5439:5432" # Changed from 5432 to 5434 to avoid conflicts with other services
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d # Initializes schema on first start
+
+  # 2. Node.js Accounting Service Container
+  accounting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: accounting_service_app
+    restart: on-failure
+    ports:
+      - "8085:8080" # Changed to avoid host port conflicts (use 8083 instead of 8080)
+    working_dir: /app
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      PORT: 8080 # Internal container port
+    depends_on:
+      - db
+
+  # 3. Database Viewer (Adminer)
+  adminer:
+    image: adminer:latest
+    container_name: db_viewer
+    restart: always
+    ports:
+      - "8081:8080" # Host 8081 → Container 8080 (OK)
+    depends_on:
+      - db
+
+  # 4. Swagger UI
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: swagger_ui
+    restart: always
+    environment:
+      SWAGGER_JSON: /app/api/openapi.yaml
+    ports:
+      - "8092:8080" # Host 8082 → Container 8080 (OK)
+    volumes:
+      - ./api/openapi.yaml:/app/api/openapi.yaml
+    depends_on:
+      - accounting-service
